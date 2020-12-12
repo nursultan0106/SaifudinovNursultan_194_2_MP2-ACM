@@ -1,0 +1,122 @@
+#include <iostream>
+#include <string>
+#include <fstream>
+#include <sstream>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <clocale>
+#include <vector>
+
+using namespace std;
+
+int n, H;
+mutex eat, sleep, printer;
+bool is_eat = false;
+bool is_sleep = false;
+bool finish = false;
+int counter = 0;
+condition_variable on_eat;
+condition_variable on_sleep;
+
+void Print(string message) {
+	printer.lock();
+	cout << message << endl;
+	printer.unlock();
+}
+
+void Bee(int id) {
+	unique_lock<mutex> lock(sleep);
+	while (!is_sleep)
+	{
+		on_sleep.wait(lock);
+	}
+	Print("Пчела №" + to_string(id) + " принесла глоток меда!");
+	this_thread::sleep_for(chrono::milliseconds(200));
+	counter++;
+	if (counter == H)
+	{
+		Print("Пчела №" + to_string(id) + " пошла будить мишку!");
+		on_eat.notify_one();
+		is_eat = true;
+		is_sleep = false;
+	}
+}
+
+void Bear() {
+	while (!finish)
+	{
+		unique_lock<mutex> lock(sleep);
+		Print("Мишка спит в своей берлоге!");
+		on_sleep.notify_all();
+		is_sleep = true;
+		while (!is_eat)
+		{
+			on_eat.wait(lock);
+		}
+		Print("Мишка проснулся и ест свой мёд!");
+		this_thread::sleep_for(chrono::milliseconds(1500));
+		is_eat = false;
+	}
+}
+
+int main()
+{
+	setlocale(LC_ALL, "ru");
+	int k = 0;
+	int j = 0;
+	cout << "Введите количество итераций(Натуральное больше нуля!)" << endl;
+	cin >> k;
+	if (k <= 0 || k > 20)
+	{
+		cout << "Неподходящий аргумент количества итераций!";
+		return 0;
+	}
+	cout << "Введите количество пчёл на пассике(Натуральное больше нуля!)" << endl;
+	cin >> n;
+	if (n <= 0 || n > 100)
+	{
+		cout << "Неподходящий аргумент количества пчёл на пассике!";
+		return 0;
+	}
+	cout << "Введите количество глотков в горшке(Натуральное больше нуля!)" << endl;
+	cin >> H;
+	if (H <= 0 || H > 100)
+	{
+		cout << "Неподходящий аргумент количества глотков в горшке!";
+		return 0;
+	}
+	vector<thread> bees;
+	thread bear(Bear);
+	while (j < k)
+	{
+		bees.clear();
+		counter = 0;
+		if (n >= H)
+		{
+			for (size_t i = 0; i < H; i++)
+			{
+				bees.push_back(thread(Bee, i + 1));
+			}
+			for (size_t i = 0; i < bees.size(); i++)
+			{
+				bees[i].join();
+			}
+		}
+		else
+		{
+			for (size_t i = 0; i < H; i++)
+			{
+				bees.push_back(thread(Bee, (i % n) + 1));
+			}
+			for (size_t i = 0; i < bees.size(); i++)
+			{
+				bees[i].join();
+			}
+		}
+		j++;
+		Print("");
+	}
+	finish = true;
+	bear.join();
+}
